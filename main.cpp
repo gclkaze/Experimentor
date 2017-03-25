@@ -3,32 +3,48 @@
 #include "SequentialColumnPusher.h"
 #include "ThreadedColumnPusher.h"
 
-std::vector<int>* createDataVector(int size){
-    std::vector<int>* v = new std::vector<int>(size);
-    for(int i = 0;i<size;i++){
-        v->at(i) = i;
-    }
-    return v;
-}
+class DataInitializer: public IDataInitializer{
+    std::vector<int>* m_Data;
+    public:
+        DataInitializer(int size){
+            initializeData(size);
+        }
+        virtual ~DataInitializer(){}
+
+        virtual bool initializeData(int size) override{
+            m_Data = new std::vector<int>(size);
+            for(int i = 0;i<size;i++){
+                m_Data->at(i) = i;
+            }
+        };
+        virtual int size() override{
+            return m_Data->size();
+        }
+
+        std::vector<int>* getData(){
+            return m_Data;
+        }
+};
 
 int main(){
     int columns = 3;
     Experimentor exp(100000000, 10000000);
     exp.Execute( 
         [](int size){
-            return createDataVector(size);
+            return std::unique_ptr<DataInitializer>(new DataInitializer(size));
         },
 
-        [&]( std::vector<int>* v){
-
+        [&]( IDataInitializer* _data){
+            DataInitializer* data = dynamic_cast<DataInitializer*>(_data);
             ThreadedColumnPusher t;
-            t.createTable(*v,columns);
+            t.createTable( *(data->getData()) ,columns);
             if(t.ready()){ }
         },
-        [&]( std::vector<int>* v){
+        [&]( IDataInitializer* _data){
+            DataInitializer* data = dynamic_cast<DataInitializer*>(_data);
 
             SequentialColumnPusher s;
-            s.createTable(*v,columns); 
+            s.createTable(*(data->getData()) ,columns); 
 
     });
     return 0;

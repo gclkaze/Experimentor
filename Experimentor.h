@@ -6,6 +6,7 @@
 #include <vector>
 #include "DynamicExperimentalMeasurement.h"
 #include "ExperimentalMeasurement.h"
+#include "IDataInitializer.h"
 
 class Experimentor{
 private:
@@ -20,9 +21,9 @@ private:
         {}
         ~Experimentor(){}
         bool Execute(
-            std::function<std::vector<int>*(int)> init,
-            std::function<void(std::vector<int>* )> first, 
-            std::function<void(std::vector<int>* )> second){
+            std::function<std::unique_ptr<IDataInitializer>(int)> init,
+            std::function<void(IDataInitializer*)> first, 
+            std::function<void(IDataInitializer*)> second){
 
             std::vector<float> ratio;
 
@@ -57,17 +58,18 @@ private:
         }
     private:
         std::unique_ptr<IExperimentalMeasurement> experiment(int size, 
-            std::function<std::vector<int>*(int)> init,
-            std::function<void(std::vector<int>* )> first, 
-            std::function<void(std::vector<int>* )> second){
+            std::function<std::unique_ptr<IDataInitializer>(int)> init,
+            std::function<void(IDataInitializer*)> first, 
+            std::function<void(IDataInitializer*)> second){
 
-            auto v = init(size);
-            
-            std::cout << "Buffer size =>"<<v->size() << " elements" << std::endl;
+            auto res = init(size);
+            //auto res = init(size);
+
+            std::cout << "Buffer size =>"<<res->size() << " elements" << std::endl;
             auto start = getTimeNow();
             
             {
-                first(v);
+                first(res.get());
             }
 
             auto finish = getTimeNow();
@@ -75,7 +77,7 @@ private:
             start = getTimeNow();
 
             {
-                second(v);
+                second(res.get());
             }
             
             finish = getTimeNow();
@@ -93,18 +95,18 @@ private:
         }
 
         std::unique_ptr<IExperimentalMeasurement> experiment(int size, 
-            std::function<std::vector<int>*(int)> init,
-            std::map<std::string,std::function<void(std::vector<int>* )> >
+            std::function<std::unique_ptr<IDataInitializer>(int)> init,
+            std::map<std::string,std::function<void(IDataInitializer* )> >
             experiments){
 
-            auto v = init(size);
-            std::cout << "Buffer size =>"<<v->size() << " elements" << std::endl;
+            auto res = init(size);
+            std::cout << "Buffer size =>"<<res->size() << " elements" << std::endl;
 
             std::unique_ptr<IExperimentalMeasurement> m = std::unique_ptr<IExperimentalMeasurement>(new DynamicExperimentalMeasurement);
 
             for (auto &exp : experiments){
                 auto start = this->getTimeNow();
-                exp.second(v);
+                exp.second(res.get());
                 auto finish = this->getTimeNow();
                 m->add(std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
             }
