@@ -4,24 +4,14 @@
 #include <map>
 #include <memory>
 #include <vector>
-
-struct measurement{
-    int t1;
-    int t2;
-    ~measurement(){}
-};
-
-struct dyn_measurement{
-    std::vector<int> t;
-    ~dyn_measurement(){}
-};
-
+#include "DynamicExperimentalMeasurement.h"
+#include "ExperimentalMeasurement.h"
 
 class Experimentor{
 private:
     int m_MaxRuns;
     int m_IncStep;
-    std::vector<std::unique_ptr<measurement>> m_Results;
+    std::vector<std::unique_ptr<IExperimentalMeasurement>> m_Results;
 
     public:
         Experimentor(int max, int incStep)
@@ -34,26 +24,25 @@ private:
             std::function<void(std::vector<int>* )> first, 
             std::function<void(std::vector<int>* )> second){
 
-            std::vector<std::unique_ptr<measurement>> results;
             std::vector<float> ratio;
 
             int loop = 0;
             for(int i = 3; i < m_MaxRuns;){
                 std::cout << "Loop #" << loop ++ << std::endl;
-                results.push_back(experiment(i,init,first, second));
+                m_Results.push_back(experiment(i,init,first, second));
                 i+= m_IncStep;
             }
 
             loop = 0;
 
-            for(auto &result : results){
+            for(auto &result : m_Results){
 
-                std::cout << "Loop #" << loop <<  "=>" << result->t1 << " / " << result->t2 << std::endl;
+                std::cout << "Loop #" << loop <<  "=>" << result->get(0) << " / " << result->get(1) << std::endl;
                 loop++;
 
-                if( result->t2){
-                    ratio.push_back((float)((float)result->t1 / result->t2)) ;
-                    std::cout << (float)((float)result->t1 / result->t2) << std::endl;
+                if( result->get(1)){
+                    ratio.push_back((float)((float)result->get(0) / result->get(1))) ;
+                    std::cout << (float)((float)result->get(0) / result->get(1) ) << std::endl;
                 }
             }
 
@@ -67,12 +56,13 @@ private:
             return true;
         }
     private:
-        std::unique_ptr<struct measurement> experiment(int size, 
+        std::unique_ptr<IExperimentalMeasurement> experiment(int size, 
             std::function<std::vector<int>*(int)> init,
             std::function<void(std::vector<int>* )> first, 
             std::function<void(std::vector<int>* )> second){
 
             auto v = init(size);
+            
             std::cout << "Buffer size =>"<<v->size() << " elements" << std::endl;
             auto start = getTimeNow();
             
@@ -91,9 +81,9 @@ private:
             finish = getTimeNow();
             int diff2 = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
 
-            std::unique_ptr<struct measurement> m = std::unique_ptr<struct measurement>(new struct measurement);
-            m->t1 = diff2;
-            m->t2 = diff1;
+            std::unique_ptr<IExperimentalMeasurement> m = std::unique_ptr<IExperimentalMeasurement>(new ExperimentalMeasurement);
+            m->add ( diff2 );
+            m->add ( diff1 );
             std::cout << diff1 << " vs " << diff2 << " for " << size << " elements.." << std::endl;
             return m;
         }
@@ -102,7 +92,7 @@ private:
             return std::chrono::high_resolution_clock::now();
         }
 
-        std::unique_ptr<struct dyn_measurement> experiment(int size, 
+        std::unique_ptr<IExperimentalMeasurement> experiment(int size, 
             std::function<std::vector<int>*(int)> init,
             std::map<std::string,std::function<void(std::vector<int>* )> >
             experiments){
@@ -110,13 +100,13 @@ private:
             auto v = init(size);
             std::cout << "Buffer size =>"<<v->size() << " elements" << std::endl;
 
-            std::unique_ptr<struct dyn_measurement> m = std::unique_ptr<struct dyn_measurement>(new struct dyn_measurement);
+            std::unique_ptr<IExperimentalMeasurement> m = std::unique_ptr<IExperimentalMeasurement>(new DynamicExperimentalMeasurement);
 
             for (auto &exp : experiments){
                 auto start = this->getTimeNow();
                 exp.second(v);
                 auto finish = this->getTimeNow();
-                m->t.push_back(std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
+                m->add(std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
             }
             return m;
         }
