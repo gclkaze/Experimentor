@@ -20,16 +20,36 @@ private:
         {}
         ~Experimentor(){}
         bool Execute(
+             std::function<std::unique_ptr<IDataInitializer>(int)> init,
+             std::map<std::string,std::function<void(IDataInitializer* )> > &
+             experiments){
+            m_Results.clear();
+            return DoExecute(init, experiments);
+            }
+        bool Execute(
             std::function<std::unique_ptr<IDataInitializer>(int)> init,
             std::function<void(IDataInitializer*)> first, 
             std::function<void(IDataInitializer*)> second){
 
-            std::vector<float> ratio;
+            m_Results.clear();
 
+            std::map<std::string,std::function<void(IDataInitializer* )>> testFunctions;
+            testFunctions["First"] = first;
+            testFunctions["Second"] = second;
+
+            return DoExecute(init, testFunctions);
+        }
+
+    private:
+
+        bool DoExecute(std::function<std::unique_ptr<IDataInitializer>(int)> init,
+             std::map<std::string,std::function<void(IDataInitializer* )> > &experiments){
+
+            std::vector<float> ratio;
             int loop = 0;
             for(int i = 3; i < m_MaxRuns;){
                 std::cout << "Loop #" << loop ++ << std::endl;
-                m_Results.push_back(experiment(i,init,first, second));
+                m_Results.push_back(experiment(i,init,experiments));
                 i+= m_IncStep;
             }
 
@@ -40,10 +60,7 @@ private:
                 std::cout << "Loop #" << loop <<  "=>" << result->get(0) << " / " << result->get(1) << std::endl;
                 loop++;
 
-                if( result->get(1)){
-                    ratio.push_back((float)((float)result->get(0) / result->get(1))) ;
-                    std::cout << (float)((float)result->get(0) / result->get(1) ) << std::endl;
-                }
+                result->calculate(ratio);
             }
 
             //Average of all ratios
@@ -51,41 +68,18 @@ private:
             for(auto &r : ratio){
                 sum += r;
             }
-            std::cout << "Parallel is "<< sum << " / " << ratio.size() << " times faster than sequential" << std::endl;
-            std::cout << "Parallel is "<< (float) ( (float) sum / ratio.size() ) << " times faster than sequential" << std::endl;
+
+            std::vector<std::string> labels;
+            if(!m_Results.empty()){
+                m_Results[0]->getLabels(labels);
+                float res = (float) ( (float) sum / ratio.size() ) ;
+                std::string fastOrSlow("slower");
+                if(res >0 ){
+                    fastOrSlow = "faster";
+                }
+                std::cout << labels[0] << " is " << res << " "<< fastOrSlow << " " << "than " << labels[1] << std::endl;
+            }
             return true;
-        }
-    private:
-        std::unique_ptr<IExperimentalMeasurement> experiment(int size, 
-            std::function<std::unique_ptr<IDataInitializer>(int)> init,
-            std::function<void(IDataInitializer*)> first, 
-            std::function<void(IDataInitializer*)> second){
-
-            auto res = init(size);
-
-            std::cout << "Buffer size =>"<<res->size() << " elements" << std::endl;
-            auto start = getTimeNow();
-            
-            {
-                first(res.get());
-            }
-
-            auto finish = getTimeNow();
-            int diff1 = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
-            start = getTimeNow();
-
-            {
-                second(res.get());
-            }
-            
-            finish = getTimeNow();
-            int diff2 = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
-
-            std::unique_ptr<IExperimentalMeasurement> m = std::unique_ptr<IExperimentalMeasurement>(new ExperimentalMeasurement);
-            m->add ( diff2 );
-            m->add ( diff1 );
-            std::cout << diff1 << " vs " << diff2 << " for " << size << " elements.." << std::endl;
-            return m;
         }
 
         std::chrono::high_resolution_clock::time_point getTimeNow(){
@@ -93,20 +87,22 @@ private:
         }
 
         std::unique_ptr<IExperimentalMeasurement> experiment(int size, 
-            std::function<std::unique_ptr<IDataInitializer>(int)> init,
+            std::function<std::unique_ptr<IDataInitializer>(int)> &init,
             std::map<std::string,std::function<void(IDataInitializer* )> >
-            experiments){
+            &experiments){
 
             auto res = init(size);
             std::cout << "Buffer size =>"<<res->size() << " elements" << std::endl;
 
             std::unique_ptr<IExperimentalMeasurement> m = std::unique_ptr<IExperimentalMeasurement>(new DynamicExperimentalMeasurement);
+            std::string label;
 
             for (auto &exp : experiments){
                 auto start = this->getTimeNow();
                 exp.second(res.get());
                 auto finish = this->getTimeNow();
-                m->add(std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
+                label = exp.first;
+                m->add(label, std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count());
             }
             return m;
         }

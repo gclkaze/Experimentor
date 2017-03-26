@@ -34,8 +34,10 @@ class DataInitializer: public IDataInitializer{
 
 int main(){
     int columns = 3;
+
     Experimentor exp(100000000, 10000000);
-    exp.Execute( 
+    
+/*    exp.Execute( 
         [](int size){
             return std::unique_ptr<DataInitializer>(new DataInitializer(size));
         },
@@ -53,6 +55,32 @@ int main(){
             SequentialColumnPusher s;
             s.createTable(*(data->getData()) ,columns); 
 
-    });
+    });*/
+    
+    std::map<std::string,std::function<void(IDataInitializer* )> > testFunctions;
+    testFunctions["Threaded"] = [&]( IDataInitializer* _data){
+            DataInitializer* data = dynamic_cast<DataInitializer*>(_data);
+
+            ThreadedColumnPusher t;
+            t.createTable( *(data->getData()) ,columns);
+            if(t.ready()){ }
+    };
+
+    testFunctions["Sequential"] = [&]( IDataInitializer* _data){
+            DataInitializer* data = dynamic_cast<DataInitializer*>(_data);
+
+            SequentialColumnPusher s;
+            s.createTable(*(data->getData()) ,columns); 
+
+    };
+
+
+    exp.Execute( 
+        [](int size){
+            return std::unique_ptr<DataInitializer>(new DataInitializer(size));
+        },
+        testFunctions
+    );
+
     return 0;
 }
