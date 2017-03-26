@@ -9,14 +9,20 @@ class DataInitializer: public IDataInitializer{
         DataInitializer(int size){
             initializeData(size);
         }
-        virtual ~DataInitializer(){}
+        virtual ~DataInitializer(){
+            if(m_Data){
+                delete m_Data;
+                m_Data = nullptr;
+            }
+        }
 
         virtual bool initializeData(int size) override{
             m_Data = new std::vector<int>(size);
             for(int i = 0;i<size;i++){
                 m_Data->at(i) = i;
             }
-        };
+        }
+
         virtual int size() override{
             return m_Data->size();
         }
@@ -36,6 +42,7 @@ int main(){
 
         [&]( IDataInitializer* _data){
             DataInitializer* data = dynamic_cast<DataInitializer*>(_data);
+
             ThreadedColumnPusher t;
             t.createTable( *(data->getData()) ,columns);
             if(t.ready()){ }

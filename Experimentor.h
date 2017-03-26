@@ -3,7 +3,6 @@
 #include <chrono>
 #include <map>
 #include <memory>
-#include <vector>
 #include "DynamicExperimentalMeasurement.h"
 #include "ExperimentalMeasurement.h"
 #include "IDataInitializer.h"
@@ -63,7 +62,6 @@ private:
             std::function<void(IDataInitializer*)> second){
 
             auto res = init(size);
-            //auto res = init(size);
 
             std::cout << "Buffer size =>"<<res->size() << " elements" << std::endl;
             auto start = getTimeNow();
